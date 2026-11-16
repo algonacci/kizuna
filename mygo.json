@@ -1,0 +1,7 @@
+{
+  "name": "Kizuna",
+  "identifier": "dev.braincore.kizuna",
+  "version": "0.1.0",
+  "out": "build",
+  "linux": { "categories": ["Development"], "command": "kizuna" }
+}
