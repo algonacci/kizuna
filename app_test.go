@@ -79,6 +79,7 @@ func TestNativeViewWorktreeFlow(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("folder action missing")
 	}
+	click(t, tt, "Worktrees")
 	click(t, tt, "Lock")
 	await(t, a, h)
 	if !a.current().Locked {
@@ -165,12 +166,27 @@ func TestSnapshots(t *testing.T) {
 	}}
 	a.selected = a.repo.Trees[1].Path
 	a.recent = []string{a.repo.Path}
+	a.repo.Remotes = []string{"origin"}
+	a.repo.RemoteURLs = map[string]string{"origin": "git@github.com:algonacci/kizuna.git"}
+	a.repoIdentities[a.repo.Path] = "algonacci/kizuna"
+	a.remote = "origin"
+	a.file = "app.go"
+	a.checked = map[string]bool{"app.go": true, "view.go": true, "resources/icon.png": false}
+	a.summary = "Add changes-first workspace"
+	a.diff = "diff --git a/app.go b/app.go\nindex 309631b..e7a4d01 100644\n--- a/app.go\n+++ b/app.go\n@@ -16,6 +16,10 @@ type app struct {\n     host       host\n     repo       *repository\n-    selected   string\n+    selected   string\n+    file       string\n+    diff       string\n+    checked    map[string]bool\n }\n\n@@ -109,4 +113,5 @@ func (a *app) selectTree(path string) {\n     a.selected = path\n+    a.syncChanges(true)\n }"
 	a.message = "3 worktrees · up to date"
 	save("workspace")
 	tt.SetSize(820, 600)
 	save("compact")
 	tt.SetSize(1180, 780)
+	a.managing = true
+	save("worktrees")
+	a.managing = false
 	a.startCreate()
 	a.draft.Branch = "feature/next-idea"
 	save("create")
+	a.startClone()
+	a.cloneURL = "https://github.com/Omniflow-id/example.git"
+	a.clonePath = "/Users/eric/Projects/example"
+	save("clone")
 }

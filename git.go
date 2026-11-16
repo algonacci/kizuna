@@ -21,11 +21,14 @@ type worktree struct {
 	Upstream                                    string
 	Ahead, Behind                               int
 	StatusError                                 string
+	Remote                                      string
 }
 type repository struct {
-	Path     string
-	Trees    []worktree
-	Branches []string
+	Path       string
+	Trees      []worktree
+	Branches   []string
+	Remotes    []string
+	RemoteURLs map[string]string
 }
 
 // Arguments are always passed directly to Git; paths and refs never enter a shell.
@@ -123,6 +126,15 @@ func loadRepository(ctx context.Context, path string) (*repository, error) {
 		return nil, err
 	}
 	r := &repository{Path: strings.TrimSuffix(common, "\n"), Trees: trees}
+	if remotes, e := git(ctx, r.Path, "remote"); e == nil {
+		r.Remotes = strings.Fields(remotes)
+	}
+	r.RemoteURLs = make(map[string]string)
+	for _, remote := range r.Remotes {
+		if url, e := git(ctx, r.Path, "remote", "get-url", remote); e == nil {
+			r.RemoteURLs[remote] = strings.TrimSpace(url)
+		}
+	}
 	refs, err := git(ctx, r.Path, "for-each-ref", "--format=%(refname:short)", "refs/heads/")
 	if err != nil {
 		return nil, err
@@ -137,12 +149,16 @@ func loadRepository(ctx context.Context, path string) (*repository, error) {
 		if w.Bare || w.Prunable {
 			continue
 		}
-		status, e := git(ctx, w.Path, "status", "--porcelain=v1", "-z", "--untracked-files=normal")
+		status, e := git(ctx, w.Path, "status", "--porcelain=v1", "-z", "--untracked-files=all")
 		if e != nil {
 			w.StatusError = e.Error()
 			continue
 		}
 		w.Changes = parseChanges(status)
+		if w.Branch != "" {
+			remote, _ := git(ctx, w.Path, "config", "--get", "branch."+w.Branch+".remote")
+			w.Remote = strings.TrimSpace(remote)
+		}
 		history, e := git(ctx, w.Path, "log", "-8", "--format=%h%x00%s%x00")
 		if e == nil {
 			entries := strings.Split(history, "\x00")

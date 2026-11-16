@@ -58,8 +58,16 @@ func (a *app) installMenu() {
 		{Role: mygo.RoleAppMenu},
 		{Label: "File", Submenu: []*mygo.MenuItem{
 			item("Open Repository…", "CmdOrCtrl+O", a.pickRepository),
+			item("Clone Repository…", "", a.startClone),
 			item("New Worktree…", "CmdOrCtrl+N", a.startCreate),
 			item("Refresh", "CmdOrCtrl+R", a.refresh),
+		}},
+		{Label: "Repository", Submenu: []*mygo.MenuItem{
+			item("Fetch", "", func() { a.remoteAction("fetch") }),
+			item("Pull", "", func() { a.remoteAction("pull") }),
+			item("Push", "", func() { a.remoteAction("push") }),
+			item("Open Folder", "", func() { a.openSelected(false) }),
+			item("Open Terminal", "", func() { a.openSelected(true) }),
 		}},
 		{Role: mygo.RoleEditMenu}, {Role: mygo.RoleWindowMenu},
 	}))

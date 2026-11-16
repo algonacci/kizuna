@@ -25,11 +25,21 @@ type app struct {
 	errorMessage              bool
 	creating, removing        bool
 	draft                     createRequest
+	managing                  bool
+	file, diff, remote        string
+	diffLoading               bool
+	diffGeneration            uint64
+	diffCancel                context.CancelFunc
+	checked                   map[string]bool
+	summary, description      string
+	cloning                   bool
+	cloneURL, clonePath       string
+	repoIdentities            map[string]string
 }
 
 func newApp(h host) *app {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &app{host: h, ctx: ctx, cancel: cancel, message: "Open a repository to get started"}
+	return &app{host: h, ctx: ctx, cancel: cancel, checked: make(map[string]bool), repoIdentities: make(map[string]string), message: "Open a repository to get started"}
 }
 func (a *app) current() *worktree {
 	if a.repo != nil {
@@ -89,20 +99,64 @@ func (a *app) openRepository(path string) {
 			}
 			same := a.repo != nil && a.repo.Path == r.Path
 			a.repo = r
+			a.repoIdentities[r.Path] = r.identity("origin")
 			a.recent = recent
 			if !same || a.current() == nil {
 				a.selected = r.Trees[0].Path
 			}
 			a.creating = false
 			a.removing = false
+			a.cloning = false
 			a.message = fmt.Sprintf("%d worktrees · up to date", len(r.Trees))
 			a.errorMessage = false
 			a.report(saveErr)
+			a.syncChanges(!same)
+			a.loadRecentIdentities()
+		})
+	}()
+}
+
+func (a *app) loadRecentIdentities() {
+	var missing []string
+	for _, path := range a.recent {
+		if a.repoIdentities[path] == "" {
+			missing = append(missing, path)
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+	go func() {
+		identities := make(map[string]string)
+		for _, path := range missing {
+			url, err := git(a.ctx, path, "remote", "get-url", "origin")
+			if err == nil {
+				identities[path] = remoteIdentity(strings.TrimSpace(url))
+			}
+			if identities[path] == "" {
+				remotes, _ := git(a.ctx, path, "remote")
+				for _, remote := range strings.Fields(remotes) {
+					url, e := git(a.ctx, path, "remote", "get-url", remote)
+					if e == nil {
+						if id := remoteIdentity(strings.TrimSpace(url)); id != "" {
+							identities[path] = id
+							break
+						}
+					}
+				}
+			}
+		}
+		a.host.Update(func() {
+			for path, id := range identities {
+				if id != "" {
+					a.repoIdentities[path] = id
+				}
+			}
 		})
 	}()
 }
 func (a *app) refresh() {
-	if a.repo != nil && !a.creating && !a.removing {
+	if a.repo != nil && !a.creating && !a.removing && !a.cloning {
 		a.openRepository(a.repo.Path)
 	}
 }
@@ -113,6 +167,9 @@ func (a *app) selectTree(path string) {
 	a.selected = path
 	a.creating = false
 	a.removing = false
+	a.managing = false
+	a.summary, a.description = "", ""
+	a.syncChanges(true)
 }
 func (a *app) startCreate() {
 	if a.busy || a.repo == nil {
@@ -125,6 +182,7 @@ func (a *app) startCreate() {
 	}
 	a.draft = createRequest{Mode: "New branch", Base: base, Path: filepath.Join(parent, repoName(a.repo)+"-worktree")}
 	a.creating = true
+	a.cloning = false
 	a.removing = false
 }
 func repoName(r *repository) string {
@@ -185,6 +243,199 @@ func (a *app) runMutation(label, selected string, fn func() error) {
 			if a.current() == nil {
 				a.selected = r.Trees[0].Path
 			}
+			a.syncChanges(false)
+		})
+	}()
+}
+
+func (a *app) syncChanges(reset bool) {
+	if reset {
+		a.checked = make(map[string]bool)
+		a.file = ""
+		a.summary, a.description = "", ""
+		a.remote = ""
+	}
+	w := a.current()
+	if w == nil {
+		a.selectFile("")
+		return
+	}
+	next := make(map[string]bool)
+	found := false
+	for _, ch := range w.Changes {
+		value, exists := a.checked[ch.Path]
+		if !exists {
+			value = true
+		}
+		next[ch.Path] = value
+		if ch.Path == a.file {
+			found = true
+		}
+	}
+	a.checked = next
+	if !found {
+		a.file = ""
+		if len(w.Changes) > 0 {
+			a.file = w.Changes[0].Path
+		}
+	}
+	valid := false
+	for _, r := range a.repo.Remotes {
+		if r == a.remote {
+			valid = true
+		}
+	}
+	if !valid {
+		a.remote = ""
+		for _, r := range a.repo.Remotes {
+			if r == w.Remote {
+				a.remote = r
+				break
+			}
+		}
+		if a.remote == "" {
+			for _, r := range a.repo.Remotes {
+				if r == "origin" {
+					a.remote = r
+					break
+				}
+			}
+		}
+		if a.remote == "" && len(a.repo.Remotes) > 0 {
+			a.remote = a.repo.Remotes[0]
+		}
+	}
+	a.selectFile(a.file)
+}
+
+func (a *app) selectFile(path string) {
+	if a.diffCancel != nil {
+		a.diffCancel()
+	}
+	a.diffGeneration++
+	a.file, a.diff, a.diffLoading = path, "", false
+	w := a.current()
+	if w == nil || path == "" {
+		return
+	}
+	var selected *change
+	for _, ch := range w.Changes {
+		if ch.Path == path {
+			copy := ch
+			selected = &copy
+			break
+		}
+	}
+	if selected == nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.diffCancel = cancel
+	gen, dir, ch := a.diffGeneration, w.Path, *selected
+	a.diffLoading = true
+	go func() {
+		preview, err := fileDiff(ctx, dir, ch)
+		a.host.Update(func() {
+			if gen != a.diffGeneration {
+				return
+			}
+			a.diffLoading = false
+			if err != nil {
+				a.diff = "Could not load diff: " + err.Error()
+			} else {
+				a.diff = preview
+			}
+		})
+	}()
+}
+
+func (a *app) selectedChanges() []change {
+	var changes []change
+	if w := a.current(); w != nil {
+		for _, ch := range w.Changes {
+			if a.checked[ch.Path] {
+				changes = append(changes, ch)
+			}
+		}
+	}
+	return changes
+}
+
+// Refresh after failures too: hooks, transport errors and pulls can change disk state.
+func (a *app) runGitAction(label string, clearCommit bool, fn func() error) {
+	if a.busy || a.repo == nil {
+		return
+	}
+	a.busy = true
+	a.message = label
+	a.errorMessage = false
+	repo := a.repo.Path
+	go func() {
+		err := fn()
+		r, reloadErr := loadRepository(a.ctx, repo)
+		a.host.Update(func() {
+			a.busy = false
+			if err == nil && clearCommit {
+				a.summary, a.description = "", ""
+			}
+			if reloadErr == nil {
+				a.repo = r
+				a.syncChanges(false)
+			}
+			a.message = "Done · repository refreshed"
+			a.errorMessage = false
+			if err != nil {
+				a.report(err)
+			} else if reloadErr != nil {
+				a.report(fmt.Errorf("Action completed; refresh failed: %w", reloadErr))
+			}
+		})
+	}()
+}
+func (a *app) commitSelected() {
+	w := a.current()
+	if a.busy || w == nil {
+		return
+	}
+	dir, summary, description, changes := w.Path, a.summary, a.description, a.selectedChanges()
+	a.runGitAction("Committing selected files…", true, func() error { return commitFiles(a.ctx, dir, summary, description, changes) })
+}
+func (a *app) remoteAction(action string) {
+	w := a.current()
+	if a.busy || w == nil {
+		return
+	}
+	dir, remote := w.Path, a.remote
+	a.runGitAction("Git "+action+" · "+remote+"…", false, func() error { return syncRemote(a.ctx, dir, action, remote) })
+}
+
+func (a *app) startClone() {
+	if a.busy {
+		return
+	}
+	a.cloning = true
+	a.creating = false
+	a.removing = false
+}
+func (a *app) cloneRepository() {
+	if a.busy {
+		return
+	}
+	url, destination := strings.TrimSpace(a.cloneURL), a.clonePath
+	a.busy = true
+	a.errorMessage = false
+	a.message = "Cloning repository…"
+	go func() {
+		err := cloneRepository(a.ctx, url, destination)
+		a.host.Update(func() {
+			a.busy = false
+			if err != nil {
+				a.report(err)
+				return
+			}
+			a.cloneURL, a.clonePath = "", ""
+			a.cloning = false
+			a.openRepository(destination)
 		})
 	}()
 }

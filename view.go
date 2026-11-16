@@ -22,13 +22,22 @@ func (a *app) view(c *ui.Context) {
 			ui.Box(c).Grow(1)
 			badge(c, "GIT WORKTREES", muted)
 		})
+		a.repositoryBar(c)
+		if a.repo != nil && !a.cloning {
+			a.toolbar(c)
+		}
 		ui.Row(c).Grow(1).MinHeight(0).FillWidth().AlignItems(ui.Stretch).Children(func() {
-			a.sidebar(c)
+			if a.repo == nil || a.managing {
+				a.sidebar(c)
+			} else {
+				a.changesSidebar(c)
+			}
 			ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).Children(func() {
-				if a.repo == nil {
+				if a.cloning {
+					ui.Scroll(c).Fill().Children(func() { ui.Column(c).FillWidth().Padding(28).Gap(22).Children(func() { a.cloneView(c) }) })
+				} else if a.repo == nil {
 					a.welcome(c)
-				} else {
-					a.toolbar(c)
+				} else if a.creating || a.managing {
 					ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
 						ui.Column(c).FillWidth().Padding(28).Gap(22).Children(func() {
 							if a.creating {
@@ -38,6 +47,8 @@ func (a *app) view(c *ui.Context) {
 							}
 						})
 					})
+				} else {
+					a.diffView(c)
 				}
 			})
 		})
@@ -64,7 +75,7 @@ func (a *app) sidebar(c *ui.Context) {
 			if a.repo != nil {
 				ui.Row(c).FillWidth().Gap(8).Children(func() {
 					ui.Icon(c, icFolder).FontSize(17).TextColor(accent)
-					ui.Text(c, repoName(a.repo)).Bold().SingleLine().Grow(1).MinWidth(0).Tooltip(a.repo.Path)
+					ui.Text(c, a.repo.identity(a.remote)).Bold().SingleLine().Grow(1).MinWidth(0).Tooltip(a.repo.Path)
 					badge(c, fmt.Sprint(len(a.repo.Trees)), muted)
 				})
 				ui.TextInput(c, &a.search).Placeholder("Filter worktrees…").Label("Filter worktrees").FillWidth()
@@ -86,7 +97,7 @@ func (a *app) sidebar(c *ui.Context) {
 						} else if b.Hovered() {
 							b.Background(raised)
 						}
-						b.OnClick(func() { a.selectTree(w.Path) }).Children(func() {
+						b.OnClick(func() { a.selectTree(w.Path); a.managing = true }).Children(func() {
 							ui.Column(c).Grow(1).MinWidth(0).Gap(7).Children(func() {
 								ui.Row(c).FillWidth().Gap(8).Children(func() {
 									ui.Icon(c, icBranch).FontSize(15).TextColor(accent)
@@ -117,6 +128,9 @@ func (a *app) sidebar(c *ui.Context) {
 					name := filepath.Base(path)
 					if name == ".git" {
 						name = filepath.Base(filepath.Dir(path))
+					}
+					if identity := a.repoIdentities[path]; identity != "" {
+						name = identity
 					}
 					c.Key("recent:" + path)
 					ui.Button(c, name).FillWidth().Label("Recent: " + path).Tooltip(path).Disabled(a.busy).OnClick(func() { a.openRepository(path) })
@@ -153,10 +167,20 @@ func statusLabel(w worktree) (string, ui.Color) {
 	return "Clean working tree", green
 }
 func (a *app) toolbar(c *ui.Context) {
-	ui.Row(c).FillWidth().Height(68).Padding(0, 28).Gap(10).BorderWidth(0, 0, 1, 0).BorderColor(line).Children(func() {
-		ui.Text(c, "Worktrees").FontSize(19).Bold().Grow(1)
+	ui.Row(c).FillWidth().Height(48).Padding(0, 16).Gap(8).BorderWidth(0, 0, 1, 0).BorderColor(line).Children(func() {
+		label := "Worktrees"
+		if a.managing {
+			label = "← Changes"
+		}
+		ui.Button(c, label).Disabled(a.busy).OnClick(func() { a.managing = !a.managing; a.creating = false; a.removing = false })
+		ui.Button(c, "+ New worktree").Disabled(a.busy).OnClick(a.startCreate)
 		ui.Button(c, "Refresh").Disabled(a.busy || a.creating || a.removing).OnClick(a.refresh)
-		ui.PrimaryButton(c, "+ New worktree").Disabled(a.busy).OnClick(a.startCreate)
+		ui.Box(c).Grow(1)
+		if w := a.current(); w != nil {
+			ui.Text(c, fmt.Sprintf("↑ %d  ↓ %d", w.Ahead, w.Behind)).FontSize(12).TextColor(muted).Tooltip(w.Upstream)
+			ui.Button(c, "Open folder").Disabled(a.busy || w.Prunable).OnClick(func() { a.openSelected(false) })
+			ui.Button(c, "Open terminal").Disabled(a.busy || w.Prunable || w.Bare).OnClick(func() { a.openSelected(true) })
+		}
 	})
 }
 func (a *app) welcome(c *ui.Context) {
@@ -185,8 +209,6 @@ func (a *app) detail(c *ui.Context, w *worktree) {
 		ui.Text(c, branchLabel(*w)).FontSize(28).Bold().SingleLine().FillWidth().MinWidth(0).Tooltip(branchLabel(*w))
 		ui.Text(c, w.Path).FontSize(12).TextColor(muted).SingleLine().FillWidth().MinWidth(0).Tooltip(w.Path)
 		ui.Row(c).FillWidth().Gap(8).Children(func() {
-			ui.Button(c, "Open folder").Disabled(a.busy || w.Prunable).OnClick(func() { a.openSelected(false) })
-			ui.Button(c, "Open terminal").Disabled(a.busy || w.Prunable).OnClick(func() { a.openSelected(true) })
 			ui.Box(c).Grow(1)
 			if !w.Main && !w.Bare {
 				label, action := "Lock", "lock"
