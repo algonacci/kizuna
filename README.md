@@ -5,6 +5,11 @@ A native Git worktree client. Parallel branches, one home.
 Built with **Go 1.27.3 + MyGo v0.7.4**, following the native desktop conventions
 in `second-brain/Go-MyGo-GUI-Desktop`.
 
+The interface follows Nimbo's labeled native icon toolbar and Tomori's quiet
+chrome: repository selection and Changes/Worktrees navigation in the left sidebar,
+a compact worktree/remote context row, and a dedicated diff panel. Repository and
+worktree pickers show short names while keeping full local paths in their menus.
+
 ## Features
 
 - Open a Git repository, linked worktree, or bare repository.

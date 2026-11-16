@@ -70,6 +70,17 @@ func TestNativeViewWorktreeFlow(t *testing.T) {
 	if a.errorMessage || len(a.repo.Trees) != 2 || a.current().Branch != "feature/from-ui" {
 		t.Fatalf("creation: %s %+v", a.message, a.repo)
 	}
+	created := a.selected
+	click(t, tt, "Worktree selector")
+	click(t, tt, "main  ·  "+original)
+	if a.selected != original {
+		t.Fatal("worktree dropdown did not select main")
+	}
+	click(t, tt, "Worktree selector")
+	click(t, tt, "feature/from-ui  ·  "+created)
+	if a.selected != created {
+		t.Fatal("worktree dropdown did not restore created worktree")
+	}
 	click(t, tt, "Open folder")
 	select {
 	case path := <-h.opened:

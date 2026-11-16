@@ -14,25 +14,20 @@ func (a *app) view(c *ui.Context) {
 	c.OnShortcut(ui.Cmd, ui.KeyN, a.startCreate)
 	c.OnShortcut(ui.Cmd, ui.KeyR, a.refresh)
 	ui.Column(c).Fill().Background(base).Children(func() {
-		inset := c.TitleBar()
-		ui.Row(c).Height(max(inset.Height, 46)).FillWidth().Padding(0, inset.Right+18, 0, inset.Left+18).Gap(10).Background(panel).DragWindow().Children(func() {
-			ui.Icon(c, icBranch).FontSize(18).TextColor(accent)
-			ui.Text(c, "Kizuna").Bold().FontSize(14)
-			ui.Text(c, "/  a little room for every branch").FontSize(12).TextColor(muted)
-			ui.Box(c).Grow(1)
-			badge(c, "GIT WORKTREES", muted)
-		})
-		a.repositoryBar(c)
-		if a.repo != nil && !a.cloning {
-			a.toolbar(c)
-		}
+		a.toolbar(c)
 		ui.Row(c).Grow(1).MinHeight(0).FillWidth().AlignItems(ui.Stretch).Children(func() {
-			if a.repo == nil || a.managing {
-				a.sidebar(c)
-			} else {
-				a.changesSidebar(c)
-			}
+			ui.Column(c).Width(286).Shrink(0).MinHeight(0).Background(panel).BorderWidth(0, 1, 0, 0).BorderColor(softLine).Children(func() {
+				a.repositoryBar(c)
+				if a.repo == nil || a.managing {
+					a.sidebar(c)
+				} else {
+					a.changesSidebar(c)
+				}
+			})
 			ui.Column(c).Grow(1).MinWidth(0).MinHeight(0).Children(func() {
+				if a.repo != nil {
+					a.contextBar(c)
+				}
 				if a.cloning {
 					ui.Scroll(c).Fill().Children(func() { ui.Column(c).FillWidth().Padding(28).Gap(22).Children(func() { a.cloneView(c) }) })
 				} else if a.repo == nil {
@@ -48,18 +43,21 @@ func (a *app) view(c *ui.Context) {
 						})
 					})
 				} else {
-					a.diffView(c)
+					ui.Column(c).FillWidth().Grow(1).MinHeight(0).Padding(12, 14, 14, 14).Children(func() {
+						ui.Column(c).Fill().Background(canvas).Border(1, softLine).Radius(10).Children(func() { a.diffView(c) })
+					})
 				}
 			})
 		})
-		ui.Row(c).FillWidth().MinHeight(32).Padding(8, 16).Gap(12).Background(panel).BorderWidth(1, 0, 0, 0).BorderColor(line).Children(func() {
+		ui.Row(c).FillWidth().MinHeight(26).Padding(5, 14).Gap(10).Background(panel).BorderWidth(1, 0, 0, 0).BorderColor(softLine).Children(func() {
 			color := muted
 			if a.errorMessage {
 				color = red
 			} else if a.busy {
 				color = accent
 			}
-			ui.Text(c, a.message).FontSize(12).TextColor(color).Grow(1).MinWidth(0)
+			ui.Box(c).Size(5, 5).Radius(3).Background(color)
+			ui.Text(c, a.message).FontSize(10.5).TextColor(color).Grow(1).MinWidth(0)
 			if a.busy {
 				ui.Text(c, "WORKING").FontSize(10).TextColor(accent).Shrink(0)
 			}
@@ -68,16 +66,10 @@ func (a *app) view(c *ui.Context) {
 }
 
 func (a *app) sidebar(c *ui.Context) {
-	ui.Column(c).Width(268).Shrink(0).MinHeight(0).Background(panel).BorderWidth(0, 1, 0, 0).BorderColor(line).Children(func() {
-		ui.Column(c).FillWidth().Padding(18).Gap(14).Children(func() {
-			caption(c, "WORKSPACE")
-			ui.Button(c, "Open repository…").FillWidth().Disabled(a.busy).OnClick(a.pickRepository)
+	ui.Column(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
+		ui.Column(c).FillWidth().Padding(14).Gap(10).Children(func() {
+			caption(c, "WORKTREES")
 			if a.repo != nil {
-				ui.Row(c).FillWidth().Gap(8).Children(func() {
-					ui.Icon(c, icFolder).FontSize(17).TextColor(accent)
-					ui.Text(c, a.repo.identity(a.remote)).Bold().SingleLine().Grow(1).MinWidth(0).Tooltip(a.repo.Path)
-					badge(c, fmt.Sprint(len(a.repo.Trees)), muted)
-				})
 				ui.TextInput(c, &a.search).Placeholder("Filter worktrees…").Label("Filter worktrees").FillWidth()
 			}
 		})
@@ -93,7 +85,7 @@ func (a *app) sidebar(c *ui.Context) {
 						c.Key(w.Path)
 						b := ui.ButtonBase(c).FillWidth().MinHeight(76).Padding(12).Radius(7).Justify(ui.Start).Label("Worktree: " + w.Path).Tooltip(w.Path).Disabled(a.busy)
 						if a.selected == w.Path && !a.creating {
-							b.Background(raised).Border(1, accent)
+							b.Background(accent.Alpha(0.10)).BorderWidth(0, 0, 0, 2).BorderColor(accent)
 						} else if b.Hovered() {
 							b.Background(raised)
 						}
@@ -167,20 +159,30 @@ func statusLabel(w worktree) (string, ui.Color) {
 	return "Clean working tree", green
 }
 func (a *app) toolbar(c *ui.Context) {
-	ui.Row(c).FillWidth().Height(48).Padding(0, 16).Gap(8).BorderWidth(0, 0, 1, 0).BorderColor(line).Children(func() {
-		label := "Worktrees"
-		if a.managing {
-			label = "← Changes"
-		}
-		ui.Button(c, label).Disabled(a.busy).OnClick(func() { a.managing = !a.managing; a.creating = false; a.removing = false })
-		ui.Button(c, "+ New worktree").Disabled(a.busy).OnClick(a.startCreate)
-		ui.Button(c, "Refresh").Disabled(a.busy || a.creating || a.removing).OnClick(a.refresh)
+	inset := c.TitleBar()
+	ui.Row(c).FillWidth().Height(max(inset.Height, 68)).Padding(0, inset.Right+10, 0, inset.Left+12).Gap(2).Background(panel).BorderWidth(0, 0, 1, 0).BorderColor(softLine).DragWindow().Children(func() {
+		ui.Row(c).Gap(8).Padding(0, 10, 0, 0).Children(func() {
+			ui.Box(c).Size(28, 28).Radius(9).LinearGradient(ui.LinearGradient{From: ui.Hex("#779ef5"), To: ui.Hex("#a28aef"), Angle: 135}).Center().Children(func() { ui.Icon(c, icBranch).FontSize(17).TextColor(ui.Hex("#ffffff")) })
+			width, _ := c.Size()
+			if width >= 1000 {
+				ui.Text(c, "Kizuna").FontSize(14).FontWeight(700)
+			}
+		})
+		toolSeparator(c)
+		tool(c, icFolder, "Add repo", "Add repository", !a.busy, false, a.pickRepository)
+		tool(c, icClone, "Clone", "Clone repository", !a.busy, a.cloning, a.startClone)
+		toolSeparator(c)
+		tool(c, icPlus, "New tree", "+ New worktree", !a.busy && a.repo != nil, a.creating, a.startCreate)
+		tool(c, icRefresh, "Refresh", "Refresh", !a.busy && a.repo != nil && !a.creating && !a.removing, false, a.refresh)
 		ui.Box(c).Grow(1)
-		if w := a.current(); w != nil {
-			ui.Text(c, fmt.Sprintf("↑ %d  ↓ %d", w.Ahead, w.Behind)).FontSize(12).TextColor(muted).Tooltip(w.Upstream)
-			ui.Button(c, "Open folder").Disabled(a.busy || w.Prunable).OnClick(func() { a.openSelected(false) })
-			ui.Button(c, "Open terminal").Disabled(a.busy || w.Prunable || w.Bare).OnClick(func() { a.openSelected(true) })
-		}
+		w := a.current()
+		enabled := !a.busy && w != nil && !w.Bare && !w.Prunable && a.remote != ""
+		tool(c, icFetch, "Fetch", "Fetch", enabled, false, func() { a.remoteAction("fetch") })
+		tool(c, icPull, "Pull", "Pull", enabled && (w == nil || !w.Detached), false, func() { a.remoteAction("pull") })
+		tool(c, icPush, "Push", "Push", enabled && (w == nil || !w.Detached), w != nil && w.Ahead > 0, func() { a.remoteAction("push") })
+		toolSeparator(c)
+		tool(c, icFolder, "Folder", "Open folder", !a.busy && w != nil && !w.Prunable, false, func() { a.openSelected(false) })
+		tool(c, icTerminal, "Terminal", "Open terminal", !a.busy && w != nil && !w.Prunable && !w.Bare, false, func() { a.openSelected(true) })
 	})
 }
 func (a *app) welcome(c *ui.Context) {

@@ -85,7 +85,7 @@ func main() {
 		if runtime.GOOS == "darwin" {
 			style = mygo.TitleBarHidden
 		}
-		d.win = mygo.NewWindow(mygo.WindowOptions{Title: "Kizuna", Width: 1180, Height: 780, MinWidth: 820, MinHeight: 600, TitleBarStyle: style, TitleBarHeight: 46, Content: ui.View(a.view)})
+		d.win = mygo.NewWindow(mygo.WindowOptions{Title: "Kizuna", Width: 1180, Height: 780, MinWidth: 820, MinHeight: 600, TitleBarStyle: style, TitleBarHeight: 68, Content: ui.View(a.view)})
 		a.installMenu()
 		d.win.OnClosed(func() { a.cancel(); mygo.App.Quit() })
 		d.win.OnFocus(func() { d.Update(a.refresh) })
