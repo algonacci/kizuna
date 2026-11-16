@@ -16,6 +16,7 @@ type host interface {
 	OpenTerminal(string) error
 }
 type app struct {
+	keyboardHelp               bool
 	host                       host
 	ctx                        context.Context
 	cancel                     context.CancelFunc

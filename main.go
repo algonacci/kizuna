@@ -77,6 +77,7 @@ func (a *app) installMenu() {
 			item("Open Terminal", "", func() { a.openSelected(true) }),
 		}},
 		{Role: mygo.RoleEditMenu}, {Role: mygo.RoleWindowMenu},
+		{Label: "Help", Submenu: []*mygo.MenuItem{item("Keyboard Shortcuts", "CmdOrCtrl+/", func() { a.keyboardHelp = true })}},
 	}))
 }
 func main() {

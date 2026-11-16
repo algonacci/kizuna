@@ -9,6 +9,8 @@ import (
 )
 
 func (a *app) view(c *ui.Context) {
+	defer a.navigationHelp(c)
+	c.OnShortcut(ui.Cmd, ui.KeySlash, func() { a.keyboardHelp = true })
 	c.SetTheme(appTheme())
 	c.OnShortcut(ui.Cmd, ui.KeyO, a.pickRepository)
 	c.OnShortcut(ui.Cmd, ui.KeyN, a.startCreate)
