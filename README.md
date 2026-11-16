@@ -16,6 +16,8 @@ worktree pickers show short names while keeping full local paths in their menus.
 - Switch repositories from a dropdown showing remote `owner/repo` (including
   organizations such as `Omniflow-id`) and local path. Add local repositories or
   clone HTTPS/SSH URLs into a new directory.
+  Clone defaults to `~/Documents/GitHub/<repository-name>` from the URL; **Choose…**
+  selects a different parent folder. The complete destination remains editable.
 - Changes-first workspace: check files on the left, review their unified diff in
   the main pane, and enter a commit summary/description below the file list.
 - Commit the full current contents of selected files while preserving unrelated

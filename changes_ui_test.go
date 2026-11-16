@@ -23,6 +23,50 @@ func awaitDiff(t *testing.T, a *app, h *fakeHost) {
 		}
 	}
 }
+
+func TestCloneDestinationDefaultsAndPicker(t *testing.T) {
+	a, h := appFixture(t)
+	tt := ui.NewTester(a.view, 1180, 780)
+	click(t, tt, "Clone repository")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.cloneParent != filepath.Join(home, "Documents", "GitHub") {
+		t.Fatal(a.cloneParent)
+	}
+	click(t, tt, "Input: REPOSITORY URL")
+	tt.Type("https://github.com/yafiihakim/endpoint")
+	tt.Frame()
+	if a.clonePath != filepath.Join(a.cloneParent, "endpoint") {
+		t.Fatal("URL did not update destination", a.clonePath)
+	}
+	h.folder = t.TempDir()
+	click(t, tt, "Choose clone folder")
+	await(t, a, h)
+	if a.clonePath != filepath.Join(h.folder, "endpoint") {
+		t.Fatal("picker did not set parent", a.clonePath)
+	}
+	before := a.clonePath
+	h.folder = ""
+	click(t, tt, "Choose clone folder")
+	await(t, a, h)
+	if a.clonePath != before {
+		t.Fatal("cancel changed destination")
+	}
+	a.cloneURL = "git@github.com:Omniflow-id/another.git"
+	a.updateClonePath()
+	if a.clonePath != filepath.Join(a.cloneParent, "another") {
+		t.Fatal("SSH URL inference", a.clonePath)
+	}
+	a.clonePath = filepath.Join(t.TempDir(), "custom-name")
+	manual := a.clonePath
+	a.cloneURL = "https://github.com/algonacci/kizuna.git"
+	a.updateClonePath()
+	if a.clonePath != manual {
+		t.Fatal("URL change overwrote manual destination")
+	}
+}
 func TestChangesSelectionCommitAndDiffUI(t *testing.T) {
 	a, h := appFixture(t)
 	root := repoFixture(t)

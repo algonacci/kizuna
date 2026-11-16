@@ -17,10 +17,11 @@ type fakeHost struct {
 	opened chan string
 }
 
-func (h *fakeHost) Update(fn func())               { h.queue <- fn }
-func (h *fakeHost) PickFolder() (string, error)    { return h.folder, nil }
-func (h *fakeHost) OpenPath(path string) error     { h.opened <- "folder:" + path; return nil }
-func (h *fakeHost) OpenTerminal(path string) error { h.opened <- "terminal:" + path; return nil }
+func (h *fakeHost) Update(fn func())                       { h.queue <- fn }
+func (h *fakeHost) PickFolder() (string, error)            { return h.folder, nil }
+func (h *fakeHost) PickCloneFolder(string) (string, error) { return h.folder, nil }
+func (h *fakeHost) OpenPath(path string) error             { h.opened <- "folder:" + path; return nil }
+func (h *fakeHost) OpenTerminal(path string) error         { h.opened <- "terminal:" + path; return nil }
 func appFixture(t *testing.T) (*app, *fakeHost) {
 	t.Helper()
 	h := &fakeHost{queue: make(chan func(), 64), opened: make(chan string, 8)}

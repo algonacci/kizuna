@@ -23,6 +23,13 @@ func (d *desktop) PickFolder() (string, error) {
 	return paths[0], err
 }
 func (d *desktop) OpenPath(path string) error { return mygo.Shell.OpenPath(path) }
+func (d *desktop) PickCloneFolder(defaultPath string) (string, error) {
+	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: d.win, Title: "Choose Parent Folder for Clone", Directory: true, DefaultPath: defaultPath, ShowHiddenFiles: true})
+	if len(paths) == 0 {
+		return "", err
+	}
+	return paths[0], err
+}
 func (d *desktop) OpenTerminal(path string) error {
 	switch runtime.GOOS {
 	case "darwin":

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -10,31 +11,33 @@ import (
 type host interface {
 	Update(func())
 	PickFolder() (string, error)
+	PickCloneFolder(string) (string, error)
 	OpenPath(string) error
 	OpenTerminal(string) error
 }
 type app struct {
-	host                      host
-	ctx                       context.Context
-	cancel                    context.CancelFunc
-	repo                      *repository
-	recent                    []string
-	configPath                string
-	selected, search, message string
-	busy                      bool
-	errorMessage              bool
-	creating, removing        bool
-	draft                     createRequest
-	managing                  bool
-	file, diff, remote        string
-	diffLoading               bool
-	diffGeneration            uint64
-	diffCancel                context.CancelFunc
-	checked                   map[string]bool
-	summary, description      string
-	cloning                   bool
-	cloneURL, clonePath       string
-	repoIdentities            map[string]string
+	host                       host
+	ctx                        context.Context
+	cancel                     context.CancelFunc
+	repo                       *repository
+	recent                     []string
+	configPath                 string
+	selected, search, message  string
+	busy                       bool
+	errorMessage               bool
+	creating, removing         bool
+	draft                      createRequest
+	managing                   bool
+	file, diff, remote         string
+	diffLoading                bool
+	diffGeneration             uint64
+	diffCancel                 context.CancelFunc
+	checked                    map[string]bool
+	summary, description       string
+	cloning                    bool
+	cloneURL, clonePath        string
+	cloneParent, cloneAutoPath string
+	repoIdentities             map[string]string
 }
 
 func newApp(h host) *app {
@@ -416,6 +419,48 @@ func (a *app) startClone() {
 	a.cloning = true
 	a.creating = false
 	a.removing = false
+	if a.cloneParent == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			a.cloneParent = filepath.Join(home, "Documents", "GitHub")
+		} else {
+			a.report(err)
+		}
+	}
+	a.updateClonePath()
+}
+
+func (a *app) updateClonePath() {
+	if a.clonePath != "" && a.clonePath != a.cloneAutoPath {
+		return
+	}
+	name := cloneFolderName(a.cloneURL)
+	a.clonePath = ""
+	if name != "" && a.cloneParent != "" {
+		a.clonePath = filepath.Join(a.cloneParent, name)
+	}
+	a.cloneAutoPath = a.clonePath
+}
+
+func (a *app) chooseCloneFolder() {
+	if a.busy {
+		return
+	}
+	a.busy = true
+	parent := a.cloneParent
+	go func() {
+		path, err := a.host.PickCloneFolder(parent)
+		a.host.Update(func() {
+			a.busy = false
+			a.report(err)
+			if err != nil || path == "" {
+				return
+			}
+			a.cloneParent = path
+			a.clonePath = ""
+			a.cloneAutoPath = ""
+			a.updateClonePath()
+		})
+	}()
 }
 func (a *app) cloneRepository() {
 	if a.busy {
@@ -434,6 +479,7 @@ func (a *app) cloneRepository() {
 				return
 			}
 			a.cloneURL, a.clonePath = "", ""
+			a.cloneAutoPath = ""
 			a.cloning = false
 			a.openRepository(destination)
 		})

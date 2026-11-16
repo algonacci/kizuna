@@ -295,8 +295,18 @@ func (a *app) cloneView(c *ui.Context) {
 	ui.Text(c, "Bring a repository home.").FontSize(27).Bold()
 	ui.Text(c, "Clone a remote repository, then work across branches in their own directories.").TextColor(muted)
 	ui.Column(c).FillWidth().MaxWidth(620).Gap(20).Children(func() {
-		field(c, "REPOSITORY URL", &a.cloneURL, "https://github.com/owner/repo.git or git@github.com:owner/repo.git", a.busy)
-		field(c, "CLONE DESTINATION", &a.clonePath, "/absolute/path/to/new-folder", a.busy)
+		ui.Column(c).FillWidth().Gap(7).Children(func() {
+			caption(c, "REPOSITORY URL")
+			ui.TextInput(c, &a.cloneURL).Label("Input: REPOSITORY URL").Placeholder("https://github.com/owner/repo.git").FillWidth().Disabled(a.busy).OnChange(a.updateClonePath)
+		})
+		ui.Column(c).FillWidth().Gap(7).Children(func() {
+			caption(c, "CLONE DESTINATION")
+			ui.Row(c).FillWidth().Gap(8).Children(func() {
+				ui.TextInput(c, &a.clonePath).Label("Input: CLONE DESTINATION").Placeholder("Paste a repository URL to fill the destination").Grow(1).MinWidth(0).Disabled(a.busy)
+				ui.Button(c, "Choose…").Label("Choose clone folder").Tooltip("Choose the parent folder; the repository name is added automatically").Shrink(0).Disabled(a.busy).OnClick(a.chooseCloneFolder)
+			})
+			ui.Text(c, "Parent folder: "+a.cloneParent).FontSize(11).TextColor(muted).SingleLine().FillWidth().Tooltip(a.cloneParent)
+		})
 		ui.Text(c, "Uses your existing Git credentials and SSH agent.").FontSize(12).TextColor(muted)
 		ui.Row(c).Gap(8).Children(func() {
 			ui.PrimaryButton(c, "Clone and open").Disabled(a.busy || a.cloneURL == "" || a.clonePath == "").OnClick(a.cloneRepository)
