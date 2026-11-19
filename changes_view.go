@@ -114,6 +114,10 @@ func (a *app) changesSidebar(c *ui.Context) {
 	}
 	_, height := c.Size()
 	compact := height < 700
+	rowHeight := float32(46)
+	if compact {
+		rowHeight = 38
+	}
 	ui.Column(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
 		ui.Row(c).FillWidth().Padding(10, 14).Gap(6).BorderWidth(1, 0, 1, 0).BorderColor(softLine).Children(func() {
 			all := len(w.Changes) > 0 && len(a.selectedChanges()) == len(w.Changes)
@@ -128,7 +132,7 @@ func (a *app) changesSidebar(c *ui.Context) {
 			ui.Column(c).FillWidth().Padding(6).Gap(2).Children(func() {
 				for _, ch := range w.Changes {
 					c.Key("file:" + ch.Path)
-					row := ui.Row(c).FillWidth().Height(46).Padding(0, 8).Gap(9).Radius(6)
+					row := ui.Row(c).FillWidth().Height(rowHeight).Padding(0, 8).Gap(9).Radius(6)
 					if a.file == ch.Path {
 						row.Background(accent.Alpha(0.12))
 					}
@@ -157,7 +161,7 @@ func (a *app) changesSidebar(c *ui.Context) {
 		})
 		padding, gap := float32(14), float32(10)
 		if compact {
-			padding, gap = 10, 6
+			padding, gap = 8, 4
 		}
 		ui.Column(c).FillWidth().Padding(padding).Gap(gap).BorderWidth(1, 0, 0, 0).BorderColor(softLine).Children(func() {
 			ui.Row(c).FillWidth().Gap(6).Children(func() {
@@ -168,7 +172,7 @@ func (a *app) changesSidebar(c *ui.Context) {
 			ui.TextInput(c, &a.summary).Bind(&a.summaryInput).Label("Commit summary").Placeholder("Summary (required)").FillWidth().Disabled(a.busy)
 			descriptionHeight := float32(66)
 			if compact {
-				descriptionHeight = 36
+				descriptionHeight = 32
 			}
 			ui.TextArea(c, &a.description).Label("Commit description").Placeholder("Description").FillWidth().Height(descriptionHeight).MinHeight(descriptionHeight).Disabled(a.busy)
 			ui.PrimaryButton(c, "Commit selected files").FillWidth().Disabled(a.busy || w.Bare || w.Prunable || w.StatusError != "" || strings.TrimSpace(a.summary) == "" || len(a.selectedChanges()) == 0).OnClick(a.commitSelected)

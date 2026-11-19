@@ -163,6 +163,24 @@ func TestWelcomeCloneAction(t *testing.T) {
 	}
 }
 
+func TestCompactChangesKeepFilesAndCommitReachable(t *testing.T) {
+	a, _ := appFixture(t)
+	a.repo = &repository{Path: "/fixture", Trees: []worktree{{Path: "/fixture", Branch: "main", Main: true, Changes: []change{
+		{Path: "app.go", Code: " M"}, {Path: "view.go", Code: "??"}, {Path: "resources/icon.png", Code: "A "},
+	}}}}
+	a.selected = "/fixture"
+	a.file = "app.go"
+	a.summary = "Review selected changes"
+	a.checked = map[string]bool{"app.go": true}
+	tt := ui.NewTester(a.view, 820, 600)
+	for _, label := range []string{"Change: app.go", "Change: view.go", "Change: resources/icon.png", "Commit summary", "Commit description", "Commit selected files"} {
+		box, ok := tt.Find(label)
+		if !ok || box.W <= 0 || box.H <= 0 || box.X < 0 || box.Y < 0 || box.X+box.W > 820 || box.Y+box.H > 600 {
+			t.Fatalf("%s not reachable at 820x600: %+v", label, box)
+		}
+	}
+}
+
 func TestSnapshots(t *testing.T) {
 	out := os.Getenv("KIZUNA_SNAPSHOT")
 	if out == "" {
