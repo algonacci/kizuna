@@ -165,7 +165,7 @@ func (a *app) changesSidebar(c *ui.Context) {
 				ui.Box(c).Grow(1)
 				ui.Text(c, fmt.Sprintf("%d files selected", len(a.selectedChanges()))).FontSize(10).TextColor(faint)
 			})
-			ui.TextInput(c, &a.summary).Label("Commit summary").Placeholder("Summary (required)").FillWidth().Disabled(a.busy)
+			ui.TextInput(c, &a.summary).Bind(&a.summaryInput).Label("Commit summary").Placeholder("Summary (required)").FillWidth().Disabled(a.busy)
 			descriptionHeight := float32(66)
 			if compact {
 				descriptionHeight = 36

@@ -69,7 +69,10 @@ go run . /absolute/path/to/repository
 ```
 
 Keyboard shortcuts: **Cmd/Ctrl+O** opens a repository, **Cmd/Ctrl+N** creates a
-worktree, and **Cmd/Ctrl+R** refreshes the current repository.
+worktree, **Cmd/Ctrl+R** refreshes the current repository, and **Cmd/Ctrl+W**
+closes the open New worktree/Clone form or remove prompt, else quits. Quitting
+(including the window's close button) asks first while a Git command is running
+or a commit message is typed but not committed.
 
 Recent repositories are stored in `kizuna/recent.json` under `os.UserConfigDir()`
 (`~/Library/Application Support` on macOS).

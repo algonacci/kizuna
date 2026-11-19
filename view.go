@@ -10,11 +10,13 @@ import (
 
 func (a *app) view(c *ui.Context) {
 	defer a.navigationHelp(c)
+	defer a.quitDialog(c)
 	c.OnShortcut(ui.Cmd, ui.KeySlash, func() { a.keyboardHelp = true })
 	c.SetTheme(appTheme())
 	c.OnShortcut(ui.Cmd, ui.KeyO, a.pickRepository)
 	c.OnShortcut(ui.Cmd, ui.KeyN, a.startCreate)
 	c.OnShortcut(ui.Cmd, ui.KeyR, a.refresh)
+	c.OnShortcut(ui.Cmd, ui.KeyW, a.closeInner)
 	ui.Column(c).Fill().Background(base).Children(func() {
 		a.toolbar(c)
 		ui.Row(c).Grow(1).MinHeight(0).FillWidth().AlignItems(ui.Stretch).Children(func() {

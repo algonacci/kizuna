@@ -22,6 +22,7 @@ func (d *desktop) PickFolder() (string, error) {
 	}
 	return paths[0], err
 }
+func (d *desktop) Quit()                      { d.win.Close() }
 func (d *desktop) OpenPath(path string) error { return mygo.Shell.OpenPath(path) }
 func (d *desktop) PickCloneFolder(defaultPath string) (string, error) {
 	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: d.win, Title: "Choose Parent Folder for Clone", Directory: true, DefaultPath: defaultPath, ShowHiddenFiles: true})
@@ -68,6 +69,7 @@ func (a *app) installMenu() {
 			item("Clone Repository…", "", a.startClone),
 			item("New Worktree…", "CmdOrCtrl+N", a.startCreate),
 			item("Refresh", "CmdOrCtrl+R", a.refresh),
+			item("Close", "CmdOrCtrl+W", a.closeInner),
 		}},
 		{Label: "Repository", Submenu: []*mygo.MenuItem{
 			item("Fetch", "", func() { a.remoteAction("fetch") }),
@@ -95,6 +97,16 @@ func main() {
 		}
 		d.win = mygo.NewWindow(mygo.WindowOptions{Title: "Kizuna", Width: 1180, Height: 780, MinWidth: 820, MinHeight: 600, TitleBarStyle: style, TitleBarHeight: 68, Content: ui.View(a.view)})
 		a.installMenu()
+		// Every way of closing the window (Cmd/Ctrl+W, its button, Cmd+Q,
+		// the window manager) is held here and decided by requestQuit on the
+		// UI thread. A session ending cannot be held, so Git commands are
+		// cancelled once the window is gone.
+		d.win.OnClose(func(e *mygo.CloseEvent) {
+			if !a.allowClose {
+				e.PreventDefault()
+				d.Update(a.requestQuit)
+			}
+		})
 		d.win.OnClosed(func() { a.cancel(); mygo.App.Quit() })
 		d.win.OnFocus(func() { d.Update(a.refresh) })
 		if len(os.Args) > 1 {

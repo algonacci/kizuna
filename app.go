@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/egoist/mygo/ui"
 )
 
 type host interface {
@@ -14,6 +16,8 @@ type host interface {
 	PickCloneFolder(string) (string, error)
 	OpenPath(string) error
 	OpenTerminal(string) error
+	// Quit closes the window once requestQuit found nothing to ask about.
+	Quit()
 }
 type app struct {
 	keyboardHelp               bool
@@ -39,6 +43,13 @@ type app struct {
 	cloneURL, clonePath        string
 	cloneParent, cloneAutoPath string
 	repoIdentities             map[string]string
+	// operation labels a Git command in flight that quitting would cut off
+	// (commit, fetch/pull/push, clone, worktree changes); reading a
+	// repository or waiting on a folder picker is not one.
+	operation string
+	// confirmQuit shows the quit question; allowClose lets the window close.
+	confirmQuit, allowClose bool
+	summaryInput            ui.Handle
 }
 
 func newApp(h host) *app {
@@ -218,6 +229,7 @@ func (a *app) mutate(action string) {
 }
 func (a *app) runMutation(label, selected string, fn func() error) {
 	a.busy = true
+	a.operation = label
 	a.message = label
 	a.errorMessage = false
 	repo := a.repo.Path
@@ -230,6 +242,7 @@ func (a *app) runMutation(label, selected string, fn func() error) {
 		}
 		a.host.Update(func() {
 			a.busy = false
+			a.operation = ""
 			if err != nil {
 				a.report(err)
 				return
@@ -371,6 +384,7 @@ func (a *app) runGitAction(label string, clearCommit bool, fn func() error) {
 		return
 	}
 	a.busy = true
+	a.operation = label
 	a.message = label
 	a.errorMessage = false
 	repo := a.repo.Path
@@ -379,6 +393,7 @@ func (a *app) runGitAction(label string, clearCommit bool, fn func() error) {
 		r, reloadErr := loadRepository(a.ctx, repo)
 		a.host.Update(func() {
 			a.busy = false
+			a.operation = ""
 			if err == nil && clearCommit {
 				a.summary, a.description = "", ""
 			}
@@ -471,10 +486,12 @@ func (a *app) cloneRepository() {
 	a.busy = true
 	a.errorMessage = false
 	a.message = "Cloning repository…"
+	a.operation = a.message
 	go func() {
 		err := cloneRepository(a.ctx, url, destination)
 		a.host.Update(func() {
 			a.busy = false
+			a.operation = ""
 			if err != nil {
 				a.report(err)
 				return
