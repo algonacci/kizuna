@@ -19,17 +19,50 @@ func readRecent(path string) []string {
 }
 
 func writeRecent(path string, recent []string) error {
+	return writeJSON(path, recent)
+}
+
+// settings are preferences kept apart from recent.json, whose format (a
+// bare list of paths) stays as it is.
+type settings struct {
+	Theme string `json:"theme,omitempty"`
+}
+
+func settingsPath(recentPath string) string {
+	if recentPath == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(recentPath), "settings.json")
+}
+
+func readSettings(path string) settings {
+	var s settings
+	if data, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(data, &s)
+	}
+	switch s.Theme {
+	case themeLight, themeDark:
+	default:
+		s.Theme = themeSystem
+	}
+	return s
+}
+
+func writeSettings(path string, s settings) error { return writeJSON(path, s) }
+
+// writeJSON replaces path atomically.
+func writeJSON(path string, value any) error {
 	if path == "" {
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(recent, "", "  ")
+	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".recent-*")
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
 	if err != nil {
 		return err
 	}

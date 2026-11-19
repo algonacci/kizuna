@@ -18,6 +18,8 @@ type host interface {
 	OpenTerminal(string) error
 	// Quit closes the window once requestQuit found nothing to ask about.
 	Quit()
+	// SetTheme makes native menus and tooltips follow the chosen mode.
+	SetTheme(mode string)
 }
 type app struct {
 	keyboardHelp               bool
@@ -49,12 +51,16 @@ type app struct {
 	operation string
 	// confirmQuit shows the quit question; allowClose lets the window close.
 	confirmQuit, allowClose bool
-	summaryInput            ui.Handle
+	// repoMenu and treeMenu open the top bar's two dropdowns.
+	repoMenu, treeMenu bool
+	// theme is the appearance mode: system, light or dark.
+	theme        string
+	summaryInput ui.Handle
 }
 
 func newApp(h host) *app {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &app{host: h, ctx: ctx, cancel: cancel, checked: make(map[string]bool), repoIdentities: make(map[string]string), message: "Open a repository to get started"}
+	return &app{host: h, ctx: ctx, cancel: cancel, checked: make(map[string]bool), repoIdentities: make(map[string]string), message: "Open a repository to get started", theme: themeSystem}
 }
 func (a *app) current() *worktree {
 	if a.repo != nil {
@@ -186,10 +192,31 @@ func (a *app) selectTree(path string) {
 	a.summary, a.description = "", ""
 	a.syncChanges(true)
 }
+
+// cycleTheme steps System → Light → Dark and remembers the choice.
+func (a *app) cycleTheme() {
+	a.theme = nextTheme(a.theme)
+	a.host.SetTheme(a.theme)
+	path, s := settingsPath(a.configPath), settings{Theme: a.theme}
+	go func() {
+		if err := writeSettings(path, s); err != nil {
+			a.host.Update(func() { a.report(fmt.Errorf("Could not save appearance: %w", err)) })
+		}
+	}()
+}
+
+// showChanges and showWorktrees switch the sidebar tab.
+func (a *app) showChanges() { a.managing, a.removing = false, false }
+func (a *app) showWorktrees() {
+	if a.repo != nil {
+		a.managing = true
+	}
+}
 func (a *app) startCreate() {
 	if a.busy || a.repo == nil {
 		return
 	}
+	a.repoMenu, a.treeMenu = false, false
 	base := "HEAD"
 	parent := filepath.Dir(a.repo.Trees[0].Path)
 	if w := a.current(); w != nil && w.Head != "" {
@@ -421,7 +448,7 @@ func (a *app) commitSelected() {
 }
 func (a *app) remoteAction(action string) {
 	w := a.current()
-	if a.busy || w == nil {
+	if a.busy || w == nil || action == "" || a.remote == "" {
 		return
 	}
 	dir, remote := w.Path, a.remote
@@ -432,6 +459,7 @@ func (a *app) startClone() {
 	if a.busy {
 		return
 	}
+	a.repoMenu, a.treeMenu = false, false
 	a.cloning = true
 	a.creating = false
 	a.removing = false

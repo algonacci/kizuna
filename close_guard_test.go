@@ -18,7 +18,7 @@ func closeFixture(t *testing.T) (*app, *fakeHost, *ui.Tester) {
 	a, h := appFixture(t)
 	h.folder = repoFixture(t)
 	tt := ui.NewTester(a.view, 1180, 780)
-	click(t, tt, "Open Git repository")
+	click(t, tt, "Add repository")
 	await(t, a, h)
 	if a.repo == nil {
 		t.Fatal(a.message)
@@ -42,19 +42,25 @@ func TestCloseIdleQuits(t *testing.T) {
 	}
 }
 
-// TestCloseFormsFirst: Primary+W closes the New worktree form, the Clone
-// form and the remove prompt as their Cancel buttons do, before quitting.
+// TestCloseFormsFirst: Primary+W closes the New worktree and Clone
+// dialogs, an open dropdown and the remove prompt as their Cancel buttons
+// (or Esc) do, before quitting.
 func TestCloseFormsFirst(t *testing.T) {
 	a, h, tt := closeFixture(t)
-	click(t, tt, "+ New worktree")
+	menu(t, tt, "Worktree selector", "New worktree")
 	pressW(tt)
 	if a.creating || h.quit || a.confirmQuit {
 		t.Fatalf("New worktree form: creating %v, quit %v", a.creating, h.quit)
 	}
-	click(t, tt, "Clone repository")
+	menu(t, tt, "Repository selector", "Clone repository")
 	pressW(tt)
 	if a.cloning || h.quit || a.confirmQuit {
 		t.Fatalf("Clone form: cloning %v, quit %v", a.cloning, h.quit)
+	}
+	click(t, tt, "Repository selector")
+	pressW(tt)
+	if a.repoMenu || h.quit || a.confirmQuit {
+		t.Fatalf("dropdown: open %v, quit %v", a.repoMenu, h.quit)
 	}
 	click(t, tt, "Worktrees")
 	a.removing = true // Remove… is offered only for linked worktrees

@@ -16,8 +16,8 @@ func primaryKey() string {
 }
 
 // closeInner is Primary+W (and File > Close): it closes the innermost open
-// thing — the remove prompt, the New worktree form, the Clone form — as
-// their Cancel buttons do, and otherwise asks to quit. Behind a dialog it
+// thing — the Clone or New worktree dialog, an open dropdown, the remove
+// prompt — as their Cancel buttons (or Esc) do, and otherwise asks to quit. Behind a dialog it
 // does nothing; Esc closes dialogs.
 func (a *app) closeInner() {
 	if a.keyboardHelp || a.confirmQuit || a.allowClose {
@@ -32,6 +32,8 @@ func (a *app) closeInner() {
 		if !a.busy {
 			a.creating = false
 		}
+	case a.repoMenu || a.treeMenu:
+		a.repoMenu, a.treeMenu = false, false
 	case a.removing && a.managing:
 		if !a.busy {
 			a.removing = false
@@ -87,19 +89,16 @@ func (a *app) quit() {
 }
 
 func (a *app) quitDialog(c *ui.Context) {
-	ui.DialogBase(c, &a.confirmQuit, func(backdrop, panel ui.Element) {
-		backdrop.Background(ui.RGBA(4, 6, 10, 0.6))
-		panel.Width(460).Padding(20).Gap(12).Background(c.Theme().Surface).Radius(10).Border(1, line)
-		ui.Text(c, "Quit Kizuna?").FontWeight(700)
+	dialog(c, &a.confirmQuit, 460, false, func() {
 		reasons := a.quitReasons()
 		if len(reasons) == 0 {
 			reasons = []string{"Nothing is running any more."}
 		}
+		dialogTitle(c, "Quit Kizuna?", "")
 		for _, reason := range reasons {
-			ui.Text(c, reason).FontSize(12.5).Wrap()
+			ui.Text(c, reason).FontSize(12.5).TextColor(muted).Wrap().FillWidth()
 		}
-		ui.Row(c).FillWidth().Gap(8).Children(func() {
-			ui.Box(c).Grow(1)
+		dialogButtons(c, func() {
 			ui.Button(c, "Cancel").AutoFocus().OnClick(a.cancelQuit)
 			ui.Button(c, "Quit Kizuna").TextColor(red).OnClick(a.quit)
 		})

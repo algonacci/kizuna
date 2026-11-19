@@ -88,7 +88,7 @@ func TestChangesSelectionCommitAndDiffUI(t *testing.T) {
 	}
 	click(t, tt, "Commit summary")
 	tt.Type("Commit from native UI")
-	click(t, tt, "Commit selected files")
+	click(t, tt, a.commitLabel(a.current()))
 	await(t, a, h)
 	awaitDiff(t, a, h)
 	if a.errorMessage {
@@ -113,7 +113,7 @@ func TestChangesSelectionCommitAndDiffUI(t *testing.T) {
 	if a.file != "unchecked.txt" || strings.Contains(a.diff, "one more edit") {
 		t.Fatal("stale preview accepted")
 	}
-	for _, size := range [][2]int{{820, 600}, {1440, 900}, {1180, 780}} {
+	for _, size := range [][2]int{{760, 520}, {1440, 900}, {1180, 780}} {
 		tt.SetSize(size[0], size[1])
 		tt.Frame()
 		click(t, tt, "Change: unchecked.txt")
@@ -149,7 +149,8 @@ func TestCloneAndRemoteActionsUI(t *testing.T) {
 	a.summary = "Commit before push"
 	a.commitSelected()
 	await(t, a, h)
-	click(t, tt, "Push")
+	tt.Frame()
+	click(t, tt, "Push origin")
 	await(t, a, h)
 	if a.errorMessage {
 		t.Fatal(a.message)
@@ -157,19 +158,19 @@ func TestCloneAndRemoteActionsUI(t *testing.T) {
 	if testGit(t, root, "rev-parse", "HEAD") != testGit(t, remote, "rev-parse", "main") {
 		t.Fatal("push button did not push")
 	}
-	click(t, tt, "Fetch")
+	click(t, tt, "Fetch origin")
 	await(t, a, h)
 	if a.errorMessage {
 		t.Fatal(a.message)
 	}
-	click(t, tt, "Pull")
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyP) // Pull has a shortcut and a menu item
 	await(t, a, h)
 	if a.errorMessage {
 		t.Fatal(a.message)
 	}
 	// Add another repository then use the dropdown to switch back.
 	h.folder = source
-	click(t, tt, "Add repository")
+	menu(t, tt, "Repository selector", "Add repository")
 	await(t, a, h)
 	tt.Frame()
 	if err := tt.Click("Repository selector"); err != nil {

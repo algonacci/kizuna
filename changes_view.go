@@ -8,103 +8,15 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-func (a *app) repositoryLabel(path string) string {
-	name := filepath.Base(path)
-	if name == ".git" {
-		name = filepath.Base(filepath.Dir(path))
+func (a *app) commitLabel(w *worktree) string {
+	if w.Detached {
+		return "Commit to detached HEAD"
 	}
-	if id := a.repoIdentities[path]; id != "" {
-		name = id
+	name := []rune(branchLabel(*w))
+	if len(name) > 30 {
+		name = append(name[:29], '…')
 	}
-	return name + "  ·  " + filepath.Dir(path)
-}
-func (a *app) repositoryBar(c *ui.Context) {
-	ui.Column(c).FillWidth().Padding(18, 14, 12, 14).Gap(9).Children(func() {
-		caption(c, "REPOSITORY")
-		labels := []string{}
-		selected := "Add a repository to get started"
-		for _, path := range a.recent {
-			labels = append(labels, a.repositoryLabel(path))
-			if a.repo != nil && a.repo.Path == path {
-				selected = a.repositoryLabel(path)
-			}
-		}
-		display := "Choose a repository"
-		if a.repo != nil {
-			display = a.repo.identity("origin")
-		}
-		picker(c, &selected, labels, "Repository selector", display, !a.busy && len(labels) > 0, func() {
-			for _, path := range a.recent {
-				if a.repositoryLabel(path) == selected {
-					a.openRepository(path)
-					return
-				}
-			}
-		})
-		if a.repo != nil {
-			ui.Text(c, filepath.Dir(a.repo.Path)).FontSize(10.5).TextColor(faint).SingleLine().FillWidth().Tooltip(a.repo.Path)
-			ui.Row(c).FillWidth().Gap(4).Padding(10, 0, 0, 0).Children(func() {
-				for _, tab := range []struct {
-					label  string
-					ic     *ui.SVG
-					active bool
-					fn     func()
-				}{
-					{"Changes", icChanges, !a.managing, func() { a.managing = false; a.creating = false; a.cloning = false }},
-					{"Worktrees", icTree, a.managing, func() { a.managing = true; a.creating = false; a.cloning = false }},
-				} {
-					b := ui.ButtonBase(c).Grow(1).Height(32).Radius(6).Gap(7).Center().Label(tab.label).Disabled(a.busy).TextColor(muted)
-					if tab.active {
-						b.Background(raised).TextColor(text)
-					} else if b.Hovered() {
-						b.Background(softLine)
-					}
-					b.OnClick(tab.fn).Children(func() { ui.Icon(c, tab.ic).FontSize(14); ui.Text(c, tab.label).FontSize(11.5) })
-				}
-			})
-		}
-	})
-}
-
-func (a *app) contextBar(c *ui.Context) {
-	ui.Row(c).FillWidth().Height(68).Padding(0, 18).Gap(12).Children(func() {
-		ui.Icon(c, icBranch).FontSize(18).TextColor(accent)
-		ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
-			caption(c, "WORKTREE")
-			labels := []string{}
-			selected := "No worktree"
-			if a.repo != nil {
-				for _, w := range a.repo.Trees {
-					label := branchLabel(w) + "  ·  " + w.Path
-					labels = append(labels, label)
-					if w.Path == a.selected {
-						selected = label
-					}
-				}
-			}
-			display := "No worktree"
-			if w := a.current(); w != nil {
-				display = branchLabel(*w)
-			}
-			picker(c, &selected, labels, "Worktree selector", display, !a.busy && a.repo != nil, func() {
-				if a.repo != nil {
-					for _, w := range a.repo.Trees {
-						if branchLabel(w)+"  ·  "+w.Path == selected {
-							a.selectTree(w.Path)
-							return
-						}
-					}
-				}
-			})
-		})
-		ui.Column(c).Width(110).Shrink(0).MinWidth(0).Gap(4).Children(func() {
-			caption(c, "REMOTE")
-			picker(c, &a.remote, a.repo.Remotes, "Remote selector", a.remote, !a.busy && len(a.repo.Remotes) > 0, func() {})
-		})
-		if w := a.current(); w != nil {
-			ui.Text(c, fmt.Sprintf("↑ %d  ↓ %d", w.Ahead, w.Behind)).FontSize(11).TextColor(muted).Tooltip(w.Upstream).Shrink(0)
-		}
-	})
+	return "Commit to " + string(name)
 }
 
 func (a *app) changesSidebar(c *ui.Context) {
@@ -113,73 +25,75 @@ func (a *app) changesSidebar(c *ui.Context) {
 		return
 	}
 	_, height := c.Size()
-	compact := height < 700
-	rowHeight := float32(46)
+	compact := height < 680
+	rowHeight := float32(32)
 	if compact {
-		rowHeight = 38
+		rowHeight = 28
 	}
+	selected := len(a.selectedChanges())
 	ui.Column(c).FillWidth().Grow(1).MinHeight(0).Children(func() {
-		ui.Row(c).FillWidth().Padding(10, 14).Gap(6).BorderWidth(1, 0, 1, 0).BorderColor(softLine).Children(func() {
-			all := len(w.Changes) > 0 && len(a.selectedChanges()) == len(w.Changes)
+		ui.Row(c).FillWidth().Height(36).Shrink(0).Padding(0, 14).Gap(10).BorderWidth(0, 0, 1, 0).BorderColor(softLine).Children(func() {
+			all := len(w.Changes) > 0 && selected == len(w.Changes)
 			ui.Checkbox(c, &all, "").Label("Select all").Disabled(a.busy || len(w.Changes) == 0).OnChange(func() {
 				for _, ch := range w.Changes {
 					a.checked[ch.Path] = all
 				}
 			})
-			ui.Text(c, fmt.Sprintf("%d changed files", len(w.Changes))).FontSize(11.5).TextColor(muted).Grow(1)
+			summary := fmt.Sprintf("%d changed files", len(w.Changes))
+			switch {
+			case len(w.Changes) == 0:
+				summary = "No changed files"
+			case len(w.Changes) == 1:
+				summary = "1 changed file"
+			case len(w.Changes) > 0 && selected != len(w.Changes):
+				summary = fmt.Sprintf("%d of %d files selected", selected, len(w.Changes))
+			}
+			ui.Text(c, summary).FontSize(11.5).TextColor(muted).SingleLine().Grow(1).Basis(0).MinWidth(0)
 		})
 		ui.Scroll(c).Grow(1).MinHeight(0).FillWidth().Children(func() {
-			ui.Column(c).FillWidth().Padding(6).Gap(2).Children(func() {
+			ui.Column(c).FillWidth().Padding(4, 0).Children(func() {
 				for _, ch := range w.Changes {
 					c.Key("file:" + ch.Path)
-					row := ui.Row(c).FillWidth().Height(rowHeight).Padding(0, 8).Gap(9).Radius(6)
+					row := ui.Row(c).FillWidth().Height(rowHeight).Padding(0, 14).Gap(10)
 					if a.file == ch.Path {
-						row.Background(accent.Alpha(0.12))
+						row.Background(accent.Alpha(0.14))
 					}
 					row.Children(func() {
 						checked := a.checked[ch.Path]
 						ui.Checkbox(c, &checked, "").Label("Include: " + ch.Path).Disabled(a.busy).OnChange(func() { a.checked[ch.Path] = checked })
-						b := ui.ButtonBase(c).Grow(1).MinWidth(0).FillHeight().Justify(ui.Start).Label("Change: " + ch.Path).Tooltip(ch.Path)
-						if b.Hovered() {
-							b.Background(raised)
+						path := ch.Path
+						if ch.From != "" {
+							path = ch.From + " → " + ch.Path
 						}
+						b := ui.ButtonBase(c).Grow(1).Basis(0).MinWidth(0).FillHeight().Gap(8).Justify(ui.Start).Label("Change: " + ch.Path).Tooltip(path).TextColor(text)
 						b.OnClick(func() { a.selectFile(ch.Path) }).Children(func() {
-							ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
-								ui.Text(c, filepath.Base(ch.Path)).FontSize(12).SingleLine().FillWidth()
+							ui.Row(c).Grow(1).Basis(0).MinWidth(0).Gap(6).Children(func() {
+								ui.Text(c, filepath.Base(ch.Path)).FontSize(12.5).SingleLine().Shrink(0).MaxWidth(200)
 								if dir := filepath.Dir(ch.Path); dir != "." {
-									ui.Text(c, dir).FontSize(10).TextColor(faint).SingleLine().FillWidth()
+									ui.Text(c, dir).FontSize(11).TextColor(faint).SingleLine().Grow(1).Basis(0).MinWidth(0)
 								}
 							})
-							badge(c, strings.TrimSpace(ch.Code), amber)
+							statusMark(c, ch.Code)
 						})
 					})
 				}
-				if len(w.Changes) == 0 {
-					ui.Text(c, "No local changes").FontSize(12).TextColor(muted).Padding(16)
-				}
 			})
 		})
-		padding, gap := float32(14), float32(10)
+		padding, gap, descriptionHeight := float32(12), float32(8), float32(64)
 		if compact {
-			padding, gap = 8, 4
+			padding, gap, descriptionHeight = 10, 6, 36
 		}
-		ui.Column(c).FillWidth().Padding(padding).Gap(gap).BorderWidth(1, 0, 0, 0).BorderColor(softLine).Children(func() {
-			ui.Row(c).FillWidth().Gap(6).Children(func() {
-				caption(c, "COMMIT")
-				ui.Box(c).Grow(1)
-				ui.Text(c, fmt.Sprintf("%d files selected", len(a.selectedChanges()))).FontSize(10).TextColor(faint)
-			})
-			ui.TextInput(c, &a.summary).Bind(&a.summaryInput).Label("Commit summary").Placeholder("Summary (required)").FillWidth().Disabled(a.busy)
-			descriptionHeight := float32(66)
-			if compact {
-				descriptionHeight = 32
+		ui.Column(c).FillWidth().Shrink(0).Padding(padding).Gap(gap).BorderWidth(1, 0, 0, 0).BorderColor(softLine).Children(func() {
+			disabled := a.busy || w.Bare || w.Prunable || w.StatusError != ""
+			ui.TextInput(c, &a.summary).Bind(&a.summaryInput).Label("Commit summary").Placeholder("Summary (required)").FillWidth().Disabled(disabled)
+			ui.TextArea(c, &a.description).Label("Commit description").Placeholder("Description").FillWidth().Height(descriptionHeight).MinHeight(descriptionHeight).Disabled(disabled)
+			commit := ui.PrimaryButton(c, a.commitLabel(w)).FillWidth().Disabled(disabled || strings.TrimSpace(a.summary) == "" || selected == 0).OnClick(a.commitSelected)
+			switch {
+			case len(w.Changes) > 0 && selected == 0:
+				commit.Tooltip("Check at least one file")
+			case strings.TrimSpace(a.summary) == "":
+				commit.Tooltip("Write a summary first")
 			}
-			ui.TextArea(c, &a.description).Label("Commit description").Placeholder("Description").FillWidth().Height(descriptionHeight).MinHeight(descriptionHeight).Disabled(a.busy)
-			ui.PrimaryButton(c, "Commit selected files").FillWidth().Disabled(a.busy || w.Bare || w.Prunable || w.StatusError != "" || strings.TrimSpace(a.summary) == "" || len(a.selectedChanges()) == 0).OnClick(a.commitSelected)
-			ui.Row(c).FillWidth().Gap(6).Children(func() {
-				ui.Icon(c, icBranch).FontSize(11).TextColor(faint)
-				ui.Text(c, branchLabel(*w)).FontSize(10.5).TextColor(muted).SingleLine().Grow(1).MinWidth(0).Tooltip(w.Path)
-			})
 		})
 	})
 }
@@ -190,22 +104,12 @@ func (a *app) diffView(c *ui.Context) {
 		return
 	}
 	if a.file == "" {
-		ui.Column(c).Fill().Center().Padding(32).Gap(16).Children(func() {
-			ui.Icon(c, icBranch).FontSize(48).TextColor(accent)
-			label, color := statusLabel(*w)
-			ui.Text(c, label).FontSize(24).Bold().TextColor(color)
-			if w.StatusError != "" {
-				ui.Text(c, w.StatusError).FontSize(12).TextColor(red)
-			}
-			ui.Text(c, w.Path).FontSize(12).TextColor(muted).SingleLine().FillWidth().Tooltip(w.Path)
-			ui.Text(c, "Pick another worktree, pull the latest commits, or start something new.").FontSize(13).TextColor(muted)
-		})
+		a.emptyState(c, w)
 		return
 	}
 	ui.Column(c).Fill().Children(func() {
-		ui.Row(c).FillWidth().Height(48).Padding(0, 18).Gap(10).BorderWidth(0, 0, 1, 0).BorderColor(softLine).Children(func() {
-			ui.Icon(c, icChanges).FontSize(16).TextColor(muted)
-			ui.Text(c, a.file).FontSize(12).FontWeight(600).SingleLine().Grow(1).MinWidth(0).Tooltip(a.file)
+		ui.Row(c).FillWidth().Height(36).Shrink(0).Padding(0, 16).Gap(10).Background(panel).BorderWidth(0, 0, 1, 0).BorderColor(softLine).Children(func() {
+			ui.Text(c, a.file).FontSize(12).FontWeight(600).SingleLine().Grow(1).Basis(0).MinWidth(0).Tooltip(a.file)
 			added, removed := 0, 0
 			for _, s := range strings.Split(a.diff, "\n") {
 				if strings.HasPrefix(s, "+") && !strings.HasPrefix(s, "+++") {
@@ -273,13 +177,13 @@ func (a *app) diffView(c *ui.Context) {
 						color = muted
 					case strings.HasPrefix(s, "+"):
 						color = green
-						bg = ui.Hex("#152a24")
+						bg = addBg
 					case strings.HasPrefix(s, "-"):
 						color = red
-						bg = ui.Hex("#301e25")
+						bg = delBg
 					case strings.HasPrefix(s, "@@"):
 						color = accent
-						bg = raised
+						bg = hunkBg
 					case strings.HasPrefix(s, "diff ") || strings.HasPrefix(s, "index "):
 						color = muted
 					}
@@ -295,26 +199,69 @@ func (a *app) diffView(c *ui.Context) {
 	})
 }
 
-func (a *app) cloneView(c *ui.Context) {
-	ui.Text(c, "Bring a repository home.").FontSize(27).Bold()
-	ui.Text(c, "Clone a remote repository, then work across branches in their own directories.").TextColor(muted)
-	ui.Column(c).FillWidth().MaxWidth(620).Gap(20).Children(func() {
-		ui.Column(c).FillWidth().Gap(7).Children(func() {
-			caption(c, "REPOSITORY URL")
-			ui.TextInput(c, &a.cloneURL).Label("Input: REPOSITORY URL").Placeholder("https://github.com/owner/repo.git").FillWidth().Disabled(a.busy).OnChange(a.updateClonePath)
-		})
-		ui.Column(c).FillWidth().Gap(7).Children(func() {
-			caption(c, "CLONE DESTINATION")
-			ui.Row(c).FillWidth().Gap(8).Children(func() {
-				ui.TextInput(c, &a.clonePath).Label("Input: CLONE DESTINATION").Placeholder("Paste a repository URL to fill the destination").Grow(1).MinWidth(0).Disabled(a.busy)
-				ui.Button(c, "Choose…").Label("Choose clone folder").Tooltip("Choose the parent folder; the repository name is added automatically").Shrink(0).Disabled(a.busy).OnClick(a.chooseCloneFolder)
+// emptyState is the right pane when the worktree has nothing to commit:
+// it says so, and offers the next steps.
+func (a *app) emptyState(c *ui.Context, w *worktree) {
+	ui.Scroll(c).Fill().Children(func() {
+		ui.Column(c).FillWidth().AlignItems(ui.Center).Padding(48, 24).Children(func() {
+			ui.Column(c).FillWidth().MaxWidth(520).Gap(18).Children(func() {
+				label, color := statusLabel(*w)
+				title, body := "No local changes", "There are no uncommitted changes in "+filepath.Base(w.Path)+". Here are some next steps."
+				if w.Bare || w.Prunable || w.StatusError != "" {
+					title, body = label, "Kizuna cannot read this worktree's files."
+					if w.StatusError != "" {
+						body = w.StatusError
+					} else if w.Prunable {
+						body = w.PruneReason
+					}
+				} else {
+					color = text
+				}
+				ui.Column(c).FillWidth().Gap(6).Children(func() {
+					ui.Text(c, title).FontSize(20).FontWeight(700).TextColor(color)
+					ui.Text(c, body).FontSize(12.5).TextColor(muted).Wrap().FillWidth()
+				})
+				usable := !a.busy && !w.Prunable
+				k := primaryKey()
+				ui.Column(c).FillWidth().Background(surface).Radius(8).Border(1, line).Children(func() {
+					suggestion(c, "Open in terminal", "Build, test or run Git commands in this worktree.", "Open terminal", "", usable && !w.Bare, func() { a.openSelected(true) })
+					suggestion(c, "Show in file manager", w.Path, "Open folder", "", usable, func() { a.openSelected(false) })
+					suggestion(c, "Work on another branch", "Check out a branch side by side in a new worktree.", "New worktree", k+"N", !a.busy, a.startCreate)
+				})
 			})
-			ui.Text(c, "Parent folder: "+a.cloneParent).FontSize(11).TextColor(muted).SingleLine().FillWidth().Tooltip(a.cloneParent)
 		})
-		ui.Text(c, "Uses your existing Git credentials and SSH agent.").FontSize(12).TextColor(muted)
-		ui.Row(c).Gap(8).Children(func() {
-			ui.PrimaryButton(c, "Clone and open").Disabled(a.busy || a.cloneURL == "" || a.clonePath == "").OnClick(a.cloneRepository)
-			ui.Button(c, "Cancel").Disabled(a.busy).OnClick(func() { a.cloning = false })
+	})
+}
+
+func suggestion(c *ui.Context, title, detail, button, shortcut string, enabled bool, fn func()) {
+	ui.Row(c).FillWidth().MinHeight(60).Padding(10, 14).Gap(12).BorderWidth(0, 0, 1, 0).BorderColor(softLine).Children(func() {
+		ui.Column(c).Grow(1).Basis(0).MinWidth(0).Gap(3).Children(func() {
+			ui.Text(c, title).FontSize(12.5).FontWeight(600)
+			ui.Text(c, detail).FontSize(11.5).TextColor(muted).SingleLine().FillWidth().Tooltip(detail)
 		})
+		if shortcut != "" {
+			ui.Text(c, shortcut).FontSize(11).TextColor(faint).Shrink(0)
+		}
+		ui.Button(c, button).Shrink(0).Disabled(!enabled).OnClick(fn)
+	})
+}
+
+func (a *app) cloneView(c *ui.Context) {
+	dialogTitle(c, "Clone repository", "Uses your existing Git credentials and SSH agent.")
+	ui.Column(c).FillWidth().Gap(6).Children(func() {
+		ui.Text(c, "Repository URL").FontSize(11.5).TextColor(muted)
+		ui.TextInput(c, &a.cloneURL).Label("Input: REPOSITORY URL").Placeholder("https://github.com/owner/repo.git").FillWidth().AutoFocus().Disabled(a.busy).OnChange(a.updateClonePath)
+	})
+	ui.Column(c).FillWidth().Gap(6).Children(func() {
+		ui.Text(c, "Local path").FontSize(11.5).TextColor(muted)
+		ui.Row(c).FillWidth().Gap(8).Children(func() {
+			ui.TextInput(c, &a.clonePath).Label("Input: CLONE DESTINATION").Placeholder("Paste a URL to fill this in").Grow(1).Basis(0).MinWidth(0).Disabled(a.busy)
+			ui.Button(c, "Choose…").Label("Choose clone folder").Tooltip("Choose the parent folder; the repository name is added automatically").Shrink(0).Disabled(a.busy).OnClick(a.chooseCloneFolder)
+		})
+		ui.Text(c, "Parent folder: "+a.cloneParent).FontSize(11).TextColor(faint).SingleLine().FillWidth().Tooltip(a.cloneParent)
+	})
+	dialogButtons(c, func() {
+		ui.Button(c, "Cancel").Disabled(a.busy).OnClick(func() { a.cloning = false })
+		ui.PrimaryButton(c, "Clone and open").Disabled(a.busy || a.cloneURL == "" || a.clonePath == "").OnClick(a.cloneRepository)
 	})
 }

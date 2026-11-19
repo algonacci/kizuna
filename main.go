@@ -23,6 +23,7 @@ func (d *desktop) PickFolder() (string, error) {
 	return paths[0], err
 }
 func (d *desktop) Quit()                      { d.win.Close() }
+func (d *desktop) SetTheme(mode string)       { mygo.Theme.SetSource(mygo.ThemeSource(mode)) }
 func (d *desktop) OpenPath(path string) error { return mygo.Shell.OpenPath(path) }
 func (d *desktop) PickCloneFolder(defaultPath string) (string, error) {
 	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: d.win, Title: "Choose Parent Folder for Clone", Directory: true, DefaultPath: defaultPath, ShowHiddenFiles: true})
@@ -65,16 +66,19 @@ func (a *app) installMenu() {
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 		{Role: mygo.RoleAppMenu},
 		{Label: "File", Submenu: []*mygo.MenuItem{
-			item("Open Repository…", "CmdOrCtrl+O", a.pickRepository),
+			item("Add Repository…", "CmdOrCtrl+O", a.pickRepository),
 			item("Clone Repository…", "", a.startClone),
 			item("New Worktree…", "CmdOrCtrl+N", a.startCreate),
 			item("Refresh", "CmdOrCtrl+R", a.refresh),
 			item("Close", "CmdOrCtrl+W", a.closeInner),
 		}},
 		{Label: "Repository", Submenu: []*mygo.MenuItem{
-			item("Fetch", "", func() { a.remoteAction("fetch") }),
-			item("Pull", "", func() { a.remoteAction("pull") }),
-			item("Push", "", func() { a.remoteAction("push") }),
+			item("Fetch", "CmdOrCtrl+Shift+T", func() { a.remoteAction("fetch") }),
+			item("Pull", "CmdOrCtrl+Shift+P", func() { a.remoteAction("pull") }),
+			item("Push", "CmdOrCtrl+P", func() { a.remoteAction("push") }),
+			{Type: mygo.MenuItemSeparator},
+			item("Show Changes", "", a.showChanges),
+			item("Manage Worktrees", "", a.showWorktrees),
 			item("Open Folder", "", func() { a.openSelected(false) }),
 			item("Open Terminal", "", func() { a.openSelected(true) }),
 		}},
@@ -83,19 +87,20 @@ func (a *app) installMenu() {
 	}))
 }
 func main() {
-	mygo.Theme.SetSource(mygo.ThemeDark)
 	d := &desktop{}
 	a := newApp(d)
 	if dir, err := os.UserConfigDir(); err == nil {
 		a.configPath = filepath.Join(dir, "kizuna", "recent.json")
 		a.recent = readRecent(a.configPath)
+		a.theme = readSettings(settingsPath(a.configPath)).Theme
 	}
+	d.SetTheme(a.theme)
 	mygo.App.WhenReady(func() {
 		style := mygo.TitleBarDefault
 		if runtime.GOOS == "darwin" {
 			style = mygo.TitleBarHidden
 		}
-		d.win = mygo.NewWindow(mygo.WindowOptions{Title: "Kizuna", Width: 1180, Height: 780, MinWidth: 820, MinHeight: 600, TitleBarStyle: style, TitleBarHeight: 68, Content: ui.View(a.view)})
+		d.win = mygo.NewWindow(mygo.WindowOptions{Title: "Kizuna", Width: 1180, Height: 780, MinWidth: 760, MinHeight: 520, TitleBarStyle: style, TitleBarHeight: 52, Content: ui.View(a.view)})
 		a.installMenu()
 		// Every way of closing the window (Cmd/Ctrl+W, its button, Cmd+Q,
 		// the window manager) is held here and decided by requestQuit on the

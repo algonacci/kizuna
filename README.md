@@ -5,10 +5,18 @@ A native Git worktree client. Parallel branches, one home.
 Built with **Go 1.27.3 + MyGo v0.7.4**, following the native desktop conventions
 in `second-brain/Go-MyGo-GUI-Desktop`.
 
-The interface follows Nimbo's labeled native icon toolbar and Tomori's quiet
-chrome: repository selection and Changes/Worktrees navigation in the left sidebar,
-a compact worktree/remote context row, and a dedicated diff panel. Repository and
-worktree pickers show short names while keeping full local paths in their menus.
+The interface follows GitHub Desktop's layout in the quiet chrome of Nimbo and
+Tomori. The top bar has three sections: **Current repository ▾** (recent
+repositories, Add, Clone, Refresh, and the remote to use when there are several),
+**Current worktree ▾** (switch worktree, New worktree, Manage worktrees, Open
+folder, Open terminal), and one remote button showing what matters now: *Pull*
+when behind, *Push* when ahead, *Publish branch* without an upstream, otherwise
+*Fetch*. The sidebar has **Changes** and **Worktrees** tabs; the commit summary,
+description and **Commit to ‹branch›** button stay pinned under the file list.
+The right pane shows the selected file's diff, or "No local changes" with next
+steps. Clone, New worktree, Remove, Quit and Keyboard shortcuts share one modal
+dialog style with a dimmed backdrop. A title bar button cycles the appearance
+System → Light → Dark (default System).
 
 ## Features
 
@@ -30,12 +38,13 @@ worktree pickers show short names while keeping full local paths in their menus.
 - Lock/unlock linked worktrees and remove them while retaining their branches.
 - Remember the last ten repositories; restore the latest on launch.
 - Refresh manually or when the window regains focus.
+- Light and dark appearance following the system, or chosen in the title bar.
 
 Removal uses Git's normal protections: locked, modified, and untracked worktrees
 are refused. Kizuna never force-removes a worktree. Primary worktrees cannot be
-removed. Missing worktrees are labeled as prunable. The **Worktrees** button opens
-the worktree management view with lock/unlock, removal, status, and recent commits;
-Open folder, Open terminal, and New worktree stay available in the toolbar.
+removed. Missing worktrees are labeled as prunable. The **Worktrees** tab lists
+worktrees with lock/unlock, removal, status, and recent commits; Open folder, Open
+terminal, and New worktree are in the worktree dropdown and the Repository menu.
 
 ## Changes and remotes
 
@@ -68,14 +77,16 @@ go tool mygo dev
 go run . /absolute/path/to/repository
 ```
 
-Keyboard shortcuts: **Cmd/Ctrl+O** opens a repository, **Cmd/Ctrl+N** creates a
-worktree, **Cmd/Ctrl+R** refreshes the current repository, and **Cmd/Ctrl+W**
-closes the open New worktree/Clone form or remove prompt, else quits. Quitting
+Keyboard shortcuts: **Cmd/Ctrl+O** adds a repository, **Cmd/Ctrl+N** creates a
+worktree, **Cmd/Ctrl+R** refreshes, **Cmd/Ctrl+Shift+T** fetches,
+**Cmd/Ctrl+Shift+P** pulls, **Cmd/Ctrl+P** pushes, **Cmd/Ctrl+/** shows all
+shortcuts, and **Cmd/Ctrl+W** closes the open dialog or dropdown, else quits. Quitting
 (including the window's close button) asks first while a Git command is running
 or a commit message is typed but not committed.
 
 Recent repositories are stored in `kizuna/recent.json` under `os.UserConfigDir()`
-(`~/Library/Application Support` on macOS).
+(`~/Library/Application Support` on macOS); the appearance choice is stored beside
+it in `kizuna/settings.json`.
 
 ## Build
 
@@ -108,8 +119,10 @@ cover selected commits, preservation of unchecked staged files, initial commits,
 rename/deletion, literal filenames, bounded diffs, clone, fetch, pull, publishing,
 upstream target names, and non-fast-forward rejection using local bare remotes.
 UI tests also exercise checkbox selection, commit, diff selection, repository
-dropdown switching, clone, fetch, pull, and push. Screenshots cover
-welcome, changes/diff, compact layout, worktree management, create, and clone. These tests do
+dropdown switching, clone, fetch, pull, push, the contextual remote button, dialog
+backdrops, and cycling/persisting the appearance. Screenshots (light and dark, at
+1280×800 and 760×520) cover welcome, changes/diff, no changes, both dropdowns,
+worktree management, create, clone, remove, quit, and keyboard shortcuts. These tests do
 not substitute for testing native file dialogs and terminal launching on the OS.
 
 ## Structure
