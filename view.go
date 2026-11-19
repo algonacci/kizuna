@@ -192,10 +192,12 @@ func (a *app) toolbar(c *ui.Context) {
 func (a *app) welcome(c *ui.Context) {
 	ui.Column(c).Fill().Center().Padding(40).Gap(18).Children(func() {
 		ui.Icon(c, icBranch).FontSize(66).TextColor(accent)
-		ui.Text(c, "Parallel branches. One home.").FontSize(27).Bold()
-		ui.Text(c, "Keep a fix, a feature, and your main branch open at once.\nKizuna gives every worktree a place of its own.").TextColor(muted).FontSize(14)
-		ui.PrimaryButton(c, "Open Git repository").Margin(12, 0).Disabled(a.busy).OnClick(a.pickRepository)
-		caption(c, "LOCAL FIRST   /   NATIVE UI   /   POWERED BY GIT")
+		ui.Text(c, "Your repositories, ready to work.").FontSize(27).Bold()
+		ui.Text(c, "Open a repository to review changes and manage worktrees.").TextColor(muted).FontSize(14)
+		ui.Row(c).Gap(10).Margin(12, 0).Children(func() {
+			ui.PrimaryButton(c, "Open Git repository").Disabled(a.busy).OnClick(a.pickRepository)
+			ui.Button(c, "Clone repository").Disabled(a.busy).OnClick(a.startClone)
+		})
 	})
 }
 func (a *app) detail(c *ui.Context, w *worktree) {

@@ -87,7 +87,8 @@ func (a *app) quit() {
 }
 
 func (a *app) quitDialog(c *ui.Context) {
-	ui.DialogBase(c, &a.confirmQuit, func(_, panel ui.Element) {
+	ui.DialogBase(c, &a.confirmQuit, func(backdrop, panel ui.Element) {
+		backdrop.Background(ui.RGBA(4, 6, 10, 0.6))
 		panel.Width(460).Padding(20).Gap(12).Background(c.Theme().Surface).Radius(10).Border(1, line)
 		ui.Text(c, "Quit Kizuna?").FontWeight(700)
 		reasons := a.quitReasons()

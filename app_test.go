@@ -150,6 +150,19 @@ func TestQueuedLoadAndFailedCreatePreserveState(t *testing.T) {
 	}
 }
 
+func TestWelcomeCloneAction(t *testing.T) {
+	a, _ := appFixture(t)
+	tt := ui.NewTester(a.view, 820, 600)
+	click(t, tt, "Clone repository")
+	if !a.cloning {
+		t.Fatal("welcome clone action did not open the clone form")
+	}
+	click(t, tt, "Cancel")
+	if a.cloning {
+		t.Fatal("clone form did not close")
+	}
+}
+
 func TestSnapshots(t *testing.T) {
 	out := os.Getenv("KIZUNA_SNAPSHOT")
 	if out == "" {
@@ -173,6 +186,9 @@ func TestSnapshots(t *testing.T) {
 		}
 	}
 	save("welcome")
+	a.keyboardHelp = true
+	save("shortcuts")
+	a.keyboardHelp = false
 	a.repo = &repository{Path: "/Users/eric/Projects/kizuna/.git", Branches: []string{"main", "feature/worktree-client"}, Trees: []worktree{
 		{Path: "/Users/eric/Projects/kizuna", Branch: "main", Head: "309631ba129d", Main: true},
 		{Path: "/Users/eric/Projects/kizuna-client", Branch: "feature/worktree-client", Head: "e7a4d01927ba", Upstream: "origin/feature/worktree-client", Ahead: 2, Changes: []change{{Code: " M", Path: "app.go"}, {Code: "??", Path: "view.go"}, {Code: "A ", Path: "resources/icon.png"}}, Commits: []commit{{"e7a4d01", "Build a native home for your worktrees"}, {"93b02ce", "Add safe Git worktree operations"}, {"309631b", "Initial commit"}}},
